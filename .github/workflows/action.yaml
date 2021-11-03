@@ -88,9 +88,18 @@ jobs:
               --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/MyLambdaRole
       - name: Wait 30 seconds
         run: sleep 30
+      - name: Invoke test function 
+        run: |
+            aws lambda invoke --function-name test-function-${{ matrix.input }} \
+              --payload $(echo "{\"input\": \"${{ matrix.input }}\"}" | base64) \
+              --output json out 
+            if grep -q "Error" out; then
+              exit1
+            fi
       - name: Destroy test function
         if: ${{ always() }}
-        run: aws lambda delete-function --function-name test-function
+        run: |
+            aws lambda delete-function --function-name test-function-${{ matrix.input }}
   
   deploy:
     runs-on: ubuntu-latest
