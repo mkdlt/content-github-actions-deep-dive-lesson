@@ -1,14 +1,16 @@
-name: Deploy my Lambda function
+name: Deploy my Lambda Function
 
-on:
+# trigger on all push events to main branch
+on: 
   push:
     branches:
       - main
-      
+
 jobs:
+
   lint:
     runs-on: ubuntu-latest
-    steps:
+    steps: 
       - name: Check out code
         uses: actions/checkout@v2
       - name: Set up Python
@@ -23,7 +25,7 @@ jobs:
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-  
+          
   build:
     runs-on: ubuntu-latest
     needs: lint
@@ -48,7 +50,6 @@ jobs:
         with:
           name: zipped-bundle
           path: ${{ github.sha }}.zip
-          
   upload:
     runs-on: ubuntu-latest
     needs: build
@@ -69,6 +70,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: upload
+    strategy:
+      matrix:
+        input: ["Hello", "Hi"]
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -78,7 +82,7 @@ jobs:
           aws-region: us-east-1
       - name: Create test function
         run: |
-          aws lambda create-function --function-name test-function \
+          aws lambda create-function --function-name test-function-${{ matrix.input }}  \
               --code S3Bucket=myawsbucket-12345random,S3Key=${{ github.sha }}.zip \
               --handler lambda_function.lambda_handler --runtime python3.9 \
               --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/MyLambdaRole
@@ -100,8 +104,20 @@ jobs:
           aws-region: us-east-1
       - name: Update function code
         run: |
-          aws lambda update-function-code \
-            --function-name myLambdaFunction \
-            --s3-bucket myawsbucket-12345random \
-            --s3-key ${{ github.sha }}.zip \
-            --publish
+            aws lambda update-function-code \
+              --function-name myLambdaFunction \
+              --s3-bucket myawsbucket-12345random \
+              --s3-key ${{ github.sha }}.zip \
+              --publish
+
+  docs:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Deploy docs
+        uses: mhausenblas/mkdocs-deploy-gh-pages@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFIG_FILE: mkdocs.yaml
